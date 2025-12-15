@@ -1,6 +1,45 @@
 import streamlit as st
 import pandas as pd
-import joblib
+import numpy as np
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.ensemble import GradientBoostingClassifier
+
+@st.cache_resource
+def train_model():
+    df = pd.read_csv('data.adult.csv')
+
+    df = df.replace("?", np.nan).dropna() # заменяем ? на np.nan и удаляем пропуски
+
+    y = df['>50K,<=50K'].replace({">50K": 1, "<=50K": 0}).astype(int) # целевая переменная
+    X = df.drop(columns='>50K,<=50K')
+
+    cat_features = X.select_dtypes(include=["object"]).columns.tolist() # типы признаков
+    num_features = X.select_dtypes(exclude=["object"]).columns.tolist()
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", StandardScaler(), num_features),
+            ("cat", OneHotEncoder(handle_unknown="ignore"), cat_features),
+        ]
+    )
+
+    model = GradientBoostingClassifier( # выбрали лучшую модель для приложения
+        n_estimators=88,     # определяем выявленные лучшие гиперпараметры модели
+        max_features=None, 
+        criterion="friedman_mse", 
+        random_state=42
+    )
+
+    pipe = Pipeline([
+        ("preprocessor", preprocessor),
+        ("model", model),
+    ]) # определяем пайплайн
+
+    pipe.fit(X, y) # фиттим под наши данные
+
+    return pipe
 
 st.set_page_config(
     page_title="Предсказатель дохода!!!",
@@ -14,11 +53,7 @@ st.write(
     "превышает ли доход порог 50K вечнозелёных."
 )
 
-@st.cache_resource # загружаем обученную модель один раз и кэшируем её
-def load_model():
-    return joblib.load("models/model.joblib")
-
-model = load_model()
+model = train_model()
 
 st.header("Ввод данных")
 
